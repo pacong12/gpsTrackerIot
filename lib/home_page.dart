@@ -1,9 +1,61 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:mapbox_gl/mapbox_gl.dart';
 
-class AppBarExample extends StatelessWidget {
-  const AppBarExample({super.key});
+class AppBarExample extends StatefulWidget {
+  const AppBarExample({Key? key}) : super(key: key);
+
+  @override
+  _AppBarExampleState createState() => _AppBarExampleState();
+}
+
+class _AppBarExampleState extends State<AppBarExample> {
+  MapboxMapController? mapController;
+  DatabaseReference? _vehicleRef;
+  double? latitude;
+  double? longitude;
+  double? altitude;
+  double? speed;
+  int? timestamp;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeFirebase();
+  }
+
+  void _initializeFirebase() {
+    final FirebaseDatabase database = FirebaseDatabase.instance;
+    _vehicleRef = database.ref('vehicles/vehicle1/location');
+    _vehicleRef!.onValue.listen((event) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      if (data != null) {
+        setState(() {
+          latitude = data['latitude'];
+          longitude = data['longitude'];
+          altitude = data['altitude'];
+          speed = data['speed'];
+          timestamp = data['timestamp'];
+        });
+        _updateMapLocation();
+      }
+    });
+  }
+
+  void _onMapCreated(MapboxMapController controller) {
+    mapController = controller;
+    _updateMapLocation();
+  }
+
+  void _updateMapLocation() {
+    if (mapController != null && latitude != null && longitude != null) {
+      mapController!.animateCamera(
+        CameraUpdate.newLatLng(LatLng(latitude!, longitude!)),
+      );
+    }
+  }
 
   void _showNotificationModal(BuildContext context) {
     showDialog(
@@ -127,28 +179,50 @@ class AppBarExample extends StatelessWidget {
             Container(
               height: 320,
               color: Color.fromARGB(255, 240, 240, 240),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  ),
-                  SizedBox(height: 10),
-                  Icon(
-                    Icons.image,
-                    size: 100,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Goggle Maps',
-                    style: TextStyle(
-                      fontSize: 24,
-                      color: Colors.grey,
+              child: latitude == null || longitude == null
+                  ? Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  : Stack(
+                      children: [
+                        MapboxMap(
+                          accessToken:
+                              'pk.eyJ1IjoiZ3JpeWEiLCJhIjoiY2x6ajBveWhhMG1qbDJqcjEweWc1NzU3YSJ9.74E0NT1xFxGeMImcixubHQ',
+                          onMapCreated: _onMapCreated,
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(latitude!, longitude!),
+                            zoom: 14.0,
+                          ),
+                        ),
+                        Positioned(
+                          right: 20,
+                          bottom: 20,
+                          child: Column(
+                            children: [
+                              FloatingActionButton(
+                                heroTag: "btn1",
+                                child: Icon(Icons.add),
+                                mini: true,
+                                onPressed: () {
+                                  mapController
+                                      ?.animateCamera(CameraUpdate.zoomIn());
+                                },
+                              ),
+                              SizedBox(height: 10),
+                              FloatingActionButton(
+                                heroTag: "btn2",
+                                child: Icon(Icons.remove),
+                                mini: true,
+                                onPressed: () {
+                                  mapController
+                                      ?.animateCamera(CameraUpdate.zoomOut());
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
             SizedBox(height: 10),
             Padding(
@@ -161,7 +235,12 @@ class AppBarExample extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 5),
-                  Text('2972 Wesheher 07 Santa area'),
+                  Text(latitude != null && longitude != null
+                      ? 'Lat: $latitude, Long: $longitude'
+                      : 'Fetching location...'),
+                  Text(altitude != null ? 'Altitude: $altitude m' : ''),
+                  Text(speed != null ? 'Speed: $speed km/h' : ''),
+                  Text(timestamp != null ? 'Timestamp: $timestamp' : ''),
                   Divider(color: Colors.grey),
                   SizedBox(height: 10),
                   Row(
@@ -227,6 +306,8 @@ class AppBarExample extends StatelessWidget {
     );
   }
 }
+
+
 
 class UserDrawerHeader extends StatefulWidget {
   @override
