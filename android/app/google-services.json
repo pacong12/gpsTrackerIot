@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "545144646009",
+    "project_id": "track-c309e",
+    "storage_bucket": "track-c309e.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:545144646009:android:05ec72528f81d79d4ea7a8",
+        "android_client_info": {
+          "package_name": "com.example.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAn9GiiNEJqfLtib8a2DVopsqrByZKsVAU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
