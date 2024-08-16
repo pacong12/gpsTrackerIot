@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'layouts/sidebar.dart';
 import 'layouts/locations.dart';
 import 'layouts/changePassword.dart';
+import 'package:intl/intl.dart';
 
 class AppBarExample extends StatefulWidget {
   const AppBarExample({Key? key}) : super(key: key);
@@ -26,6 +27,7 @@ class _AppBarExampleState extends State<AppBarExample> {
   double? speed;
   int? timestamp;
   bool isEngineOn = true;
+  bool isAlarmOn = false;
   String? address;
   final String mapboxAccessToken =
       'pk.eyJ1IjoiZ3JpeWEiLCJhIjoiY2x6ajBveWhhMG1qbDJqcjEweWc1NzU3YSJ9.74E0NT1xFxGeMImcixubHQ';
@@ -61,6 +63,37 @@ class _AppBarExampleState extends State<AppBarExample> {
         });
       }
     });
+
+    _vehicleRef!.child('alarm').onValue.listen((event) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      if (data != null) {
+        setState(() {
+          isAlarmOn = data['isArmed'] ?? false;
+        });
+      }
+    });
+  }
+
+  Future<void> _toggleAlarm() async {
+    try {
+      await _vehicleRef!.child('alarm').update({
+        'isArmed': !isAlarmOn,
+        'type': isAlarmOn ? 'ALARM_OFF' : 'ALARM_ON',
+        'executed': true,
+      });
+      // Kita tidak perlu mengubah state di sini karena listener akan mengupdate UI
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text('Alarm ${isAlarmOn ? 'dinonaktifkan' : 'diaktifkan'}')),
+      );
+    } catch (e) {
+      print('Error toggling alarm: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Gagal mengubah status alarm. Silakan coba lagi.')),
+      );
+    }
   }
 
   Future<void> _updateAddress() async {
@@ -123,30 +156,41 @@ class _AppBarExampleState extends State<AppBarExample> {
           title: Text('Notifikasi'),
           content: Container(
             width: double.maxFinite,
-            child: ListView(
-              shrinkWrap: true,
-              children: <Widget>[
-                ListTile(
-                  leading: Icon(Icons.power, color: Colors.green),
-                  title: Text('Mesin 1 ON'),
-                  subtitle: Text('2 menit yang lalu'),
-                ),
-                ListTile(
-                  leading: Icon(Icons.power_off, color: Colors.red),
-                  title: Text('Mesin 2 OFF'),
-                  subtitle: Text('5 menit yang lalu'),
-                ),
-                ListTile(
-                  leading: Icon(Icons.warning, color: Colors.orange),
-                  title: Text('Peringatan: Suhu Mesin 3 Tinggi'),
-                  subtitle: Text('10 menit yang lalu'),
-                ),
-                ListTile(
-                  leading: Icon(Icons.security, color: Colors.red),
-                  title: Text('AWAS: Terdeteksi Maling!'),
-                  subtitle: Text('1 jam yang lalu'),
-                ),
-              ],
+            child: StreamBuilder(
+              stream: _vehicleRef!.child('notifications').onValue,
+              builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+                if (snapshot.hasData &&
+                    !snapshot.hasError &&
+                    snapshot.data!.snapshot.value != null) {
+                  Map<dynamic, dynamic> notifications =
+                      snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+                  List<MapEntry<dynamic, dynamic>> sortedNotifications =
+                      notifications.entries.toList()
+                        ..sort((a, b) => b.value['timestamp']
+                            .compareTo(a.value['timestamp']));
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: sortedNotifications.length,
+                    itemBuilder: (context, index) {
+                      var notification = sortedNotifications[index].value;
+                      return ListTile(
+                        leading: _getNotificationIcon(notification['message']),
+                        title: Text(notification['message']),
+                        subtitle:
+                            Text(_formatTimestamp(notification['timestamp'])),
+                        trailing: notification['read']
+                            ? null
+                            : Icon(Icons.fiber_new, color: Colors.blue),
+                      );
+                    },
+                  );
+                } else if (snapshot.hasError) {
+                  return Text('Error: ${snapshot.error}');
+                } else {
+                  return CircularProgressIndicator();
+                }
+              },
             ),
           ),
           actions: <Widget>[
@@ -156,25 +200,67 @@ class _AppBarExampleState extends State<AppBarExample> {
                 Navigator.of(context).pop();
               },
             ),
+            TextButton(
+              child: Text('Tandai Semua Dibaca'),
+              onPressed: () {
+                _markAllAsRead();
+                Navigator.of(context).pop();
+              },
+            ),
           ],
         );
       },
     );
   }
 
+  Widget _getNotificationIcon(String message) {
+    if (message.contains('Mesin') && message.contains('ON')) {
+      return Icon(Icons.power, color: Colors.green);
+    } else if (message.contains('Mesin') && message.contains('OFF')) {
+      return Icon(Icons.power_off, color: Colors.red);
+    } else if (message.contains('Suhu')) {
+      return Icon(Icons.warning, color: Colors.orange);
+    } else if (message.contains('Maling')) {
+      return Icon(Icons.security, color: Colors.red);
+    } else {
+      return Icon(Icons.notifications);
+    }
+  }
+
+  String _formatTimestamp(int timestamp) {
+    DateTime dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    Duration difference = DateTime.now().difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays} hari yang lalu';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours} jam yang lalu';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes} menit yang lalu';
+    } else {
+      return 'Baru saja';
+    }
+  }
+
+  void _markAllAsRead() {
+    _vehicleRef!.child('notifications').once().then((DatabaseEvent event) {
+      if (event.snapshot.value != null) {
+        Map<dynamic, dynamic> notifications =
+            event.snapshot.value as Map<dynamic, dynamic>;
+        notifications.forEach((key, value) {
+          _vehicleRef!.child('notifications/$key/read').set(true);
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: Builder(
-          builder: (BuildContext context) {
-            return IconButton(
-              icon: Icon(Icons.notifications),
-              onPressed: () {
-                _showNotificationModal(context);
-              },
-            );
-          },
+        leading: IconButton(
+          icon: Icon(Icons.notifications),
+          onPressed: () => _showNotificationModal(context),
         ),
         centerTitle: true,
         actions: [
@@ -199,7 +285,7 @@ class _AppBarExampleState extends State<AppBarExample> {
               leading: Icon(Icons.person),
               title: Text('Profil'),
               onTap: () {
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => ProfilePage()),
@@ -210,7 +296,7 @@ class _AppBarExampleState extends State<AppBarExample> {
               leading: Icon(Icons.key),
               title: Text('Change Password'),
               onTap: () {
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => ChangePasswordPage()),
@@ -307,11 +393,14 @@ class _AppBarExampleState extends State<AppBarExample> {
                           Text('Keamanan:'),
                           SizedBox(height: 5),
                           ElevatedButton(
-                            onPressed: () {},
-                            child: Text('Alarm : ON'),
+                            onPressed:
+                                _toggleAlarm, // Hubungkan ke fungsi _toggleAlarm
+                            child:
+                                Text(isAlarmOn ? 'Alarm : ON' : 'Alarm : OFF'),
                             style: ElevatedButton.styleFrom(
-                              foregroundColor: Colors.black,
-                              backgroundColor: Colors.grey[300],
+                              foregroundColor: Colors.white,
+                              backgroundColor:
+                                  isAlarmOn ? Colors.green : Colors.red,
                             ),
                           ),
                         ],
@@ -367,7 +456,8 @@ void _showLogoutConfirmationDialog(BuildContext context) {
               // Logika logout
               await FirebaseAuth.instance.signOut();
               Navigator.of(context).pop(); // Menutup dialog
-              Navigator.pushReplacementNamed(context, '/auth'); // Navigasi ke halaman otentikasi
+              Navigator.pushReplacementNamed(
+                  context, '/auth'); // Navigasi ke halaman otentikasi
             },
           ),
         ],
@@ -375,8 +465,6 @@ void _showLogoutConfirmationDialog(BuildContext context) {
     },
   );
 }
-
-
 class UserDrawerHeader extends StatefulWidget {
   @override
   _UserDrawerHeaderState createState() => _UserDrawerHeaderState();
