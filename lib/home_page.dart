@@ -221,9 +221,7 @@ class _AppBarExampleState extends State<AppBarExample> {
               leading: Icon(Icons.logout),
               title: Text('Logout'),
               onTap: () {
-                Navigator.pop(context); // Close the drawer
-                Navigator.pushReplacementNamed(
-                    context, '/auth'); // Navigate to auth screen
+                _showLogoutConfirmationDialog(context);
               },
             ),
           ],
@@ -348,6 +346,36 @@ class _AppBarExampleState extends State<AppBarExample> {
     );
   }
 }
+
+void _showLogoutConfirmationDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Konfirmasi Logout'),
+        content: Text('Apakah Anda yakin ingin logout?'),
+        actions: <Widget>[
+          TextButton(
+            child: Text('Batal'),
+            onPressed: () {
+              Navigator.of(context).pop(); // Menutup dialog
+            },
+          ),
+          TextButton(
+            child: Text('Logout'),
+            onPressed: () async {
+              // Logika logout
+              await FirebaseAuth.instance.signOut();
+              Navigator.of(context).pop(); // Menutup dialog
+              Navigator.pushReplacementNamed(context, '/auth'); // Navigasi ke halaman otentikasi
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
 class UserDrawerHeader extends StatefulWidget {
   @override

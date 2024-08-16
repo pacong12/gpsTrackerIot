@@ -3,8 +3,8 @@ import 'auth.dart';
 import 'home_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-// import 'package:mapbox_gl/mapbox_gl.dart'; // Tambahkan impor paket mapbox_gl
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,11 +12,6 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
-  // Konfigurasi Mapbox API key
-
-  // MapboxGL.setAccessToken(
-  //     'pk.eyJ1IjoiZ3JpeWEiLCJhIjoiY2x6ajBveWhhMG1qbDJqcjEweWc1NzU3YSJ9.74E0NT1xFxGeMImcixubHQ');
 
   runApp(MyApp());
 }
@@ -37,11 +32,30 @@ class MyApp extends StatelessWidget {
           fillColor: Colors.grey[200],
         ),
       ),
-      initialRoute: '/auth',
+      home:
+       FutureBuilder<bool>(
+        future: _checkLoginStatus(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          } else {
+            if (snapshot.data == true) {
+              return const AppBarExample();
+            } else {
+              return const AuthPage();
+            }
+          }
+        },
+      ),
       routes: {
         '/auth': (context) => const AuthPage(),
         '/home': (context) => const AppBarExample(),
       },
     );
+  }
+
+  Future<bool> _checkLoginStatus() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('isLoggedIn') ?? false;
   }
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/widgets.dart';
+// import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({Key? key}) : super(key: key);
@@ -45,69 +46,78 @@ class _AuthPageState extends State<AuthPage> {
       _obscureConfirmPassword = !_obscureConfirmPassword;
     });
   }
+// In _submitForm method of AuthPage class
+Future<void> _submitForm() async {
+  if (_formKey.currentState!.validate()) {
+    _formKey.currentState!.save();
+    try {
+      if (_isLogin) {
+        // Login
+        await _auth.signInWithEmailAndPassword(
+          email: _email,
+          password: _password,
+        );
 
-  Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate()) {
-      _formKey.currentState!.save();
-      try {
-        if (_isLogin) {
-          // Login
-          await _auth.signInWithEmailAndPassword(
-            email: _email,
-            password: _password,
-          );
-          Navigator.of(context).pushReplacementNamed('/home');
-        } else {
-          // Register
-          if (_password != _confirmPassword) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Passwords do not match')),
-            );
-            return;
-          }
-          UserCredential userCredential =
-              await _auth.createUserWithEmailAndPassword(
-            email: _email,
-            password: _password,
-          );
+        // Save login status
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
 
-          // Save additional user data to Firestore
-          await _firestore
-              .collection('users')
-              .doc(userCredential.user!.uid)
-              .set({
-            'email': _email,
-            'name': _name,
-            'address': _address,
-            'licenseNumber': _licenseNumber,
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-
+        Navigator.of(context).pushReplacementNamed('/home');
+      } else {
+        // Register
+        if (_password != _confirmPassword) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Registration successful')),
+            const SnackBar(content: Text('Passwords do not match')),
           );
-          _toggleView(); // Switch to login view after successful registration
+          return;
         }
-      } on FirebaseAuthException catch (e) {
-        String errorMessage = 'An error occurred. Please try again.';
-        if (e.code == 'user-not-found') {
-          errorMessage = 'No user found for that email.';
-        } else if (e.code == 'wrong-password') {
-          errorMessage = 'Wrong password provided.';
-        } else if (e.code == 'email-already-in-use') {
-          errorMessage = 'The account already exists for that email.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
+        UserCredential userCredential =
+            await _auth.createUserWithEmailAndPassword(
+          email: _email,
+          password: _password,
         );
-      } catch (e) {
+
+        // Save additional user data to Firestore
+        await _firestore
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set({
+          'email': _email,
+          'name': _name,
+          'address': _address,
+          'licenseNumber': _licenseNumber,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // Save login status
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true);
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          const SnackBar(content: Text('Registration successful')),
         );
+        _toggleView(); // Switch to login view after successful registration
       }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = 'An error occurred. Please try again.';
+      if (e.code == 'user-not-found') {
+        errorMessage = 'No user found for that email.';
+      } else if (e.code == 'wrong-password') {
+        errorMessage = 'Wrong password provided.';
+      } else if (e.code == 'email-already-in-use') {
+        errorMessage = 'The account already exists for that email.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -123,10 +133,12 @@ class _AuthPageState extends State<AuthPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Image.asset('assets/images/logo.png',height: 120,),
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 120,
+                ),
                 const SizedBox(height: 20),
                 TextFormField(
-                  
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email),
