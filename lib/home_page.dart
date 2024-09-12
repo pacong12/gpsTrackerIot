@@ -15,6 +15,7 @@ class AppBarExample extends StatefulWidget {
   const AppBarExample({Key? key}) : super(key: key);
 
   @override
+  // ignore: library_private_types_in_public_api
   _AppBarExampleState createState() => _AppBarExampleState();
 }
 
@@ -26,7 +27,7 @@ class _AppBarExampleState extends State<AppBarExample> {
   double? altitude;
   double? speed;
   int? timestamp;
-  bool isEngineOn = true;
+  bool isEngineOn = false;
   bool isAlarmOn = false;
   String? address;
   final String mapboxAccessToken =
@@ -45,21 +46,20 @@ class _AppBarExampleState extends State<AppBarExample> {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data != null) {
         setState(() {
-          latitude = data['latitude'];
-          longitude = data['longitude'];
-          altitude = data['altitude'];
-          speed = data['speed'];
+
+          latitude = double.tryParse(data['latitude'].toString());
+          longitude = double.tryParse(data['longitude'].toString());
           timestamp = data['timestamp'];
         });
         _updateAddress();
       }
     });
-    _vehicleRef!.child('command').onValue.listen((event) {
+
+    _vehicleRef!.child('engine').onValue.listen((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data != null) {
         setState(() {
-          isEngineOn =
-              data['type'] == 'START_ENGINE' && data['executed'] == false;
+          isEngineOn = data['type'] == 'ENGINE_ON' && data['executed'] == true;
         });
       }
     });
@@ -68,30 +68,38 @@ class _AppBarExampleState extends State<AppBarExample> {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data != null) {
         setState(() {
-          isAlarmOn = data['isArmed'] ?? false;
+          isAlarmOn = data['type'] == 'ALARM_ON' && data['executed'] == true;
         });
+      }
+    });
+    _vehicleRef!.child('notif').onValue.listen((event) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      if (data != null) {
+        // Handle notification data
+        String message = data['message'];
+        bool read = data['read'];
+        int notifTimestamp = data['timestamp'];
+        // Update UI or show notification based on this data
       }
     });
   }
 
   Future<void> _toggleAlarm() async {
     try {
+      final newAlarmStatus = isAlarmOn ? 'ALARM_OFF' : 'ALARM_ON';
       await _vehicleRef!.child('alarm').update({
-        'isArmed': !isAlarmOn,
-        'type': isAlarmOn ? 'ALARM_OFF' : 'ALARM_ON',
+        'type': newAlarmStatus,
         'executed': true,
       });
-      // Kita tidak perlu mengubah state di sini karena listener akan mengupdate UI
+      // Hanya update data alarm
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text('Alarm ${isAlarmOn ? 'dinonaktifkan' : 'diaktifkan'}')),
+        SnackBar(content: Text('Alarm command sent. Waiting for execution...')),
       );
     } catch (e) {
       print('Error toggling alarm: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Gagal mengubah status alarm. Silakan coba lagi.')),
+            content: Text('Failed to change alarm status. Please try again.')),
       );
     }
   }
@@ -129,11 +137,10 @@ class _AppBarExampleState extends State<AppBarExample> {
   }
 
   Future<void> _toggleEngine() async {
-    final newState = !isEngineOn;
     try {
-      await _vehicleRef!.child('command').set({
-        'type': newState ? 'START_ENGINE' : 'STOP_ENGINE',
-        'executed': newState ? false : true,
+      await _vehicleRef!.child('engine').update({
+        'type': isEngineOn ? 'ENGINE_OFF' : 'ENGINE_ON',
+        'executed': true,
       });
       // We don't set the state here because the listener will update it
       ScaffoldMessenger.of(context).showSnackBar(
@@ -318,6 +325,7 @@ class _AppBarExampleState extends State<AppBarExample> {
           children: <Widget>[
             Container(
               height: 320,
+              width: double.infinity,
               color: Color.fromARGB(255, 240, 240, 240),
               child: latitude == null || longitude == null
                   ? const Center(
@@ -374,8 +382,7 @@ class _AppBarExampleState extends State<AppBarExample> {
                           Text('Kontak:'),
                           SizedBox(height: 5),
                           ElevatedButton(
-                            onPressed:
-                                _toggleEngine, // Connect the button to the _toggleEngine function
+                            onPressed: _toggleEngine,
                             child:
                                 Text(isEngineOn ? 'Mesin : ON' : 'Mesin : OFF'),
                             style: ElevatedButton.styleFrom(
@@ -393,8 +400,7 @@ class _AppBarExampleState extends State<AppBarExample> {
                           Text('Keamanan:'),
                           SizedBox(height: 5),
                           ElevatedButton(
-                            onPressed:
-                                _toggleAlarm, // Hubungkan ke fungsi _toggleAlarm
+                            onPressed: _toggleAlarm,
                             child:
                                 Text(isAlarmOn ? 'Alarm : ON' : 'Alarm : OFF'),
                             style: ElevatedButton.styleFrom(
@@ -465,6 +471,7 @@ void _showLogoutConfirmationDialog(BuildContext context) {
     },
   );
 }
+
 class UserDrawerHeader extends StatefulWidget {
   @override
   _UserDrawerHeaderState createState() => _UserDrawerHeaderState();

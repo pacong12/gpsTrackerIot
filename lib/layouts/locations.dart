@@ -32,8 +32,8 @@ class _LocationPageState extends State<LocationPage> {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data != null) {
         setState(() {
-          _latitude = data['latitude'] as double?;
-          _longitude = data['longitude'] as double?;
+            _latitude = double.parse(data['latitude'].toString());
+            _longitude = double.parse(data['longitude'].toString());
         });
       }
     });
